@@ -1,91 +1,26 @@
-import streamlit as st
+import gradio as gr
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 
-# ── Page config ───────────────────────────────────────────────
-st.set_page_config(
-    page_title="BART Text Summarizer",
-    page_icon="📝",
-    layout="wide",
-)
-
-# ── Sidebar ───────────────────────────────────────────────────
-st.sidebar.title("📝 BART Text Summarizer")
-st.sidebar.markdown("---")
-st.sidebar.write("### About")
-st.sidebar.write(
-    "This app uses a fine-tuned **BART** (Bidirectional and Auto-Regressive "
-    "Transformer) model to generate abstractive summaries from input text."
-)
-st.sidebar.markdown("---")
-st.sidebar.write("### Model Info")
-st.sidebar.write("- **Base:** facebook/bart-base")
-st.sidebar.write("- **Fine-tuned on:** CNN/Daily Mail")
-st.sidebar.write("- **Training samples:** 50,000")
-st.sidebar.write("- **ROUGE-1:** 0.4198")
-st.sidebar.write("- **ROUGE-2:** 0.1941")
-st.sidebar.write("- **ROUGE-L:** 0.2925")
-st.sidebar.markdown("---")
-st.sidebar.write("### Supported Use Cases")
-st.sidebar.write(
-    "✅ News Articles\n\n✅ Emails\n\n✅ Customer Reviews\n\n"
-    "✅ Meeting Reports\n\n✅ Research Papers\n\n✅ Legal Documents\n\n"
-    "✅ Medical Reports\n\n✅ Stories & Conversations"
-)
-st.sidebar.markdown("---")
-st.sidebar.write("*Diya Mathew | MSc Data Science & Analytics*")
-st.sidebar.write("*University of Hertfordshire*")
-
-# ── Model loading ─────────────────────────────────────────────
+# ── Load model ────────────────────────────────────────────────
 MODEL_ID = "diya2022/bart-text-summarizer"
 
-@st.cache_resource(show_spinner=False)
-def load_model():
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_ID)
-    model.eval()
-    return tokenizer, model
+print(f"Loading model: {MODEL_ID}")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_ID)
+model.eval()
+print("✅ Model loaded.")
 
-# ── Main UI ───────────────────────────────────────────────────
-st.title("🤖 Automatic Text Summarization using BART Transformer")
-st.markdown(
-    "Generate concise, human-like abstractive summaries using a fine-tuned "
-    "**BART** model trained on 50,000 CNN/Daily Mail article-summary pairs."
-)
-st.markdown("---")
 
-with st.spinner("⏳ Loading model — first run takes ~30 seconds..."):
-    tokenizer, model = load_model()
-st.success("✅ Model loaded and ready!")
+def summarize(text, max_length, min_length, num_beams, length_penalty):
+    """Generate a summary for the input text."""
+    if not text or not text.strip():
+        return "⚠️ Please enter some text to summarise."
 
-st.markdown("---")
+    word_count = len(text.split())
+    if word_count < 20:
+        return "⚠️ Text is too short. Please provide at least 20 words."
 
-# ── Input and settings ────────────────────────────────────────
-col1, col2 = st.columns([3, 1])
-
-with col1:
-    st.subheader("📄 Input Text")
-    input_text = st.text_area(
-        label="Paste your text here (article, email, report, review, etc.)",
-        height=300,
-        placeholder="Paste your article, email, meeting report, or any text here...",
-    )
-    word_count = len(input_text.split()) if input_text.strip() else 0
-    st.caption(f"Word count: {word_count}")
-
-with col2:
-    st.subheader("⚙️ Settings")
-    max_length = st.slider("Max Summary Length", 50, 300, 130, 10)
-    min_length = st.slider("Min Summary Length", 10, 100, 30, 5)
-    num_beams  = st.slider("Beam Search Width", 1, 8, 4, 1,
-                           help="Higher = better quality but slower")
-    length_penalty = st.slider("Length Penalty", 0.5, 2.0, 1.0, 0.1,
-                                help="Values > 1 encourage longer summaries")
-
-# ── Summarize ─────────────────────────────────────────────────
-st.markdown("---")
-
-def generate_summary(text, max_len, min_len, beams, len_pen):
     inputs = tokenizer(
         text,
         return_tensors="pt",
@@ -93,70 +28,134 @@ def generate_summary(text, max_len, min_len, beams, len_pen):
         truncation=True,
         padding=True,
     )
+
     with torch.no_grad():
         ids = model.generate(
             inputs["input_ids"],
             attention_mask=inputs["attention_mask"],
-            max_length=max_len,
-            min_length=min_len,
-            num_beams=beams,
-            length_penalty=len_pen,
+            max_length=int(max_length),
+            min_length=int(min_length),
+            num_beams=int(num_beams),
+            length_penalty=float(length_penalty),
             no_repeat_ngram_size=3,
             early_stopping=True,
         )
-    return tokenizer.decode(ids[0], skip_special_tokens=True)
 
+    summary = tokenizer.decode(ids[0], skip_special_tokens=True)
+    summary_words = len(summary.split())
+    compression = round((1 - summary_words / word_count) * 100, 1)
 
-if st.button("🚀 Generate Summary", use_container_width=True):
-    if not input_text.strip():
-        st.warning("⚠️ Please enter some text first.")
-    elif word_count < 20:
-        st.warning("⚠️ Text is too short. Please provide more context.")
-    else:
-        with st.spinner("⏳ Generating summary..."):
-            summary = generate_summary(
-                input_text, max_length, min_length, num_beams, length_penalty
-            )
+    output = f"{summary}\n\n"
+    output += f"📊 Stats: {word_count} words → {summary_words} words ({compression}% compression)"
+    return output
 
-        st.markdown("---")
-        st.subheader("📋 Generated Summary")
-        st.success(summary)
-
-        summary_words  = len(summary.split())
-        compression    = round((1 - summary_words / word_count) * 100, 1)
-        st.caption(
-            f"Summary: {summary_words} words | "
-            f"Original: {word_count} words | "
-            f"Compression: {compression}%"
-        )
-
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.download_button(
-                "⬇️ Download Summary",
-                data=summary,
-                file_name="summary.txt",
-                mime="text/plain",
-            )
 
 # ── Examples ──────────────────────────────────────────────────
-st.markdown("---")
-with st.expander("💡 Example — News Article"):
-    st.text_area("Copy and paste into the input box above:", height=120, value=(
+examples = [
+    [
         "Scientists have discovered a new species of deep-sea fish in the Pacific Ocean "
         "at a depth of over 8,000 metres. The translucent creature, which has no eyes, "
         "was found during an expedition by the Schmidt Ocean Institute. Researchers believe "
         "the fish has adapted to the extreme pressure and darkness of the hadal zone. "
-        "The discovery adds to a growing list of species found in the world's deepest trenches, "
-        "highlighting how little we know about deep-sea biodiversity."
-    ))
+        "The discovery adds to a growing list of species found in the world's deepest "
+        "trenches, highlighting how little we know about deep-sea biodiversity. The team "
+        "published their findings in the journal Nature on Monday.",
+        130, 30, 4, 1.0
+    ],
+    [
+        "Dear Team, I am writing to inform you that our quarterly review meeting has been "
+        "rescheduled from Thursday 9th to Monday 13th at 10am in the main conference room. "
+        "Please update your calendars accordingly. The agenda will include Q3 performance "
+        "review, budget planning for Q4, and discussion of the new product roadmap. "
+        "Please come prepared with your department updates. If you cannot attend, "
+        "please send your report to me by Friday. Best regards, James",
+        80, 20, 4, 1.0
+    ],
+    [
+        "The new restaurant downtown has quickly become a favourite among locals. "
+        "The menu features a wide range of dishes inspired by Mediterranean cuisine, "
+        "with fresh ingredients sourced from local farmers. The ambiance is warm and "
+        "inviting, with soft lighting and comfortable seating. The staff are attentive "
+        "and knowledgeable about the menu. Prices are reasonable for the quality offered. "
+        "The dessert menu is particularly impressive, with homemade gelato and tiramisu "
+        "that have already gained a loyal following. Reservations are recommended as the "
+        "restaurant fills up quickly, especially on weekends.",
+        80, 20, 4, 1.0
+    ],
+]
 
-with st.expander("💡 Example — Email"):
-    st.text_area("Copy and paste into the input box above:", height=120, value=(
-        "Dear Team, I am writing to follow up on our Q3 project proposal. Our team has "
-        "completed the initial research phase and we are ready to move into development. "
-        "We need your approval on the budget allocation of £45,000 by Friday in order to "
-        "proceed on schedule. We also need to schedule a kick-off meeting for the week of "
-        "the 15th. We have a hard deadline of the 30th for the first deliverable. "
-        "Please let us know if you have any questions. Best regards, Sarah"
-    ))
+# ── Build Gradio UI ───────────────────────────────────────────
+with gr.Blocks(theme=gr.themes.Soft(), title="BART Text Summarizer") as demo:
+
+    gr.Markdown("""
+    # 🤖 Automatic Text Summarization using BART Transformer
+    Fine-tuned **BART** model trained on **50,000 CNN/Daily Mail** article-summary pairs.
+
+    | Metric | Score |
+    |--------|-------|
+    | ROUGE-1 | 0.4198 |
+    | ROUGE-2 | 0.1941 |
+    | ROUGE-L | 0.2925 |
+
+    *Diya Mathew — MSc Data Science & Analytics, University of Hertfordshire*
+    """)
+
+    with gr.Row():
+        with gr.Column(scale=3):
+            input_text = gr.Textbox(
+                label="📄 Input Text",
+                placeholder="Paste your article, email, meeting report, review, or any text here...",
+                lines=12,
+            )
+
+        with gr.Column(scale=1):
+            gr.Markdown("### ⚙️ Settings")
+            max_length = gr.Slider(50, 300, value=130, step=10,
+                                   label="Max Summary Length")
+            min_length = gr.Slider(10, 100, value=30, step=5,
+                                   label="Min Summary Length")
+            num_beams  = gr.Slider(1, 8, value=4, step=1,
+                                   label="Beam Search Width",
+                                   info="Higher = better quality, slower")
+            length_penalty = gr.Slider(0.5, 2.0, value=1.0, step=0.1,
+                                       label="Length Penalty",
+                                       info=">1 encourages longer summaries")
+
+    summarize_btn = gr.Button("🚀 Generate Summary", variant="primary", size="lg")
+
+    output_text = gr.Textbox(
+        label="📋 Generated Summary",
+        lines=6,
+        show_copy_button=True,
+    )
+
+    summarize_btn.click(
+        fn=summarize,
+        inputs=[input_text, max_length, min_length, num_beams, length_penalty],
+        outputs=output_text,
+    )
+
+    gr.Markdown("### 💡 Try an Example")
+    gr.Examples(
+        examples=examples,
+        inputs=[input_text, max_length, min_length, num_beams, length_penalty],
+        outputs=output_text,
+        fn=summarize,
+        cache_examples=False,
+        label="Click any example to load it",
+    )
+
+    gr.Markdown("""
+    ---
+    ### 🌍 Supported Use Cases
+    ✅ News Articles &nbsp; ✅ Emails &nbsp; ✅ Customer Reviews &nbsp; ✅ Meeting Reports
+    &nbsp; ✅ Research Papers &nbsp; ✅ Legal Documents &nbsp; ✅ Medical Reports
+
+    **Model:** [diya2022/bart-text-summarizer](https://huggingface.co/diya2022/bart-text-summarizer)
+    &nbsp;|&nbsp;
+    **GitHub:** [bart-text-summarizer](https://github.com/diya2022/bart-text-summarizer)
+    """)
+
+
+if __name__ == "__main__":
+    demo.launch()
