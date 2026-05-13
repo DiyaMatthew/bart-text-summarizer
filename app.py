@@ -85,7 +85,7 @@ examples = [
 ]
 
 # ── Build Gradio UI ───────────────────────────────────────────
-with gr.Blocks(theme=gr.themes.Soft(), title="BART Text Summarizer") as demo:
+with gr.Blocks(title="BART Text Summarizer") as demo:
 
     gr.Markdown("""
     # 🤖 Automatic Text Summarization using BART Transformer
@@ -126,7 +126,6 @@ with gr.Blocks(theme=gr.themes.Soft(), title="BART Text Summarizer") as demo:
     output_text = gr.Textbox(
         label="📋 Generated Summary",
         lines=6,
-        show_copy_button=True,
     )
 
     summarize_btn.click(
@@ -158,4 +157,4 @@ with gr.Blocks(theme=gr.themes.Soft(), title="BART Text Summarizer") as demo:
 
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(theme=gr.themes.Soft())
