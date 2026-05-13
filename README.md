@@ -1,3 +1,4 @@
+
 # 🤖 BART Abstractive Text Summarizer
 
 > Fine-tuned BART transformer for automatic abstractive text summarization, trained on 50,000 CNN/Daily Mail article-summary pairs.
@@ -78,7 +79,9 @@ print(result["summary"])
 
 ### Run the Web App
 ```bash
-streamlit run app.py
+python app.py
+
+https://huggingface.co/spaces/diya2022/bart-text-summarizer 
 ```
 
 ### Run Evaluation
@@ -149,3 +152,7 @@ print(summary[0]["summary_text"])
 MSc Data Science & Analytics, University of Hertfordshire
 
 [![HuggingFace](https://img.shields.io/badge/🤗-diya2022-yellow)](https://huggingface.co/diya2022)
+
+```markdown
+**GitHub:** [bart-text-summarizer](https://github.com/DiyaMatthew/bart-text-summarizer)
+```
